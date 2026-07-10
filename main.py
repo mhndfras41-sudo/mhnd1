@@ -34,9 +34,6 @@ intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- Trade channel configuration (in-memory) ---
-trade_channel_id = None
-
 # --- Verification configuration (in-memory) ---
 verify_message_id = None
 verify_role_ids = []
@@ -60,6 +57,10 @@ MAX_TAX_AMOUNT = 1_000_000_000_000  # حد أعلى منطقي لمنع القي
 # --- Simple per-user cooldown against tax-reply spam ---
 _last_tax_reply = {}
 TAX_COOLDOWN_SECONDS = 5
+
+# --- Cooldown dictionary for ad posting (ساعتين = 7200 ثانية) ---
+_ad_cooldowns = {}
+AD_COOLDOWN_DURATION = 7200
 
 
 def parse_amount(text: str):
@@ -142,6 +143,10 @@ class AdModal(discord.ui.Modal):
             target_channel = interaction.channel
 
         await target_channel.send(embed=embed, view=view)
+
+        # تسجيل وقت النشر الحالي لتفعيل الكول داون للعضو
+        _ad_cooldowns[interaction.user.id] = time.time()
+
         await interaction.response.send_message(
             f"✅ تم نشر إعلانك بنجاح في {target_channel.mention}",
             ephemeral=True,
@@ -161,7 +166,7 @@ class ContactButton(discord.ui.View):
         )
 
 
-# --- القائمة المنسدلة المحدثة بالرومات الخاصة بك ---
+# --- القائمة المنسدلة المحدثة بالرومات الخاصة بك مع نظام الكول داون ---
 class ChannelSelect(discord.ui.Select):
 
     def __init__(self):
@@ -184,7 +189,6 @@ class ChannelSelect(discord.ui.Select):
                 value="1524578533467488286",
                 emoji="🎨",
             ),
-            # تم اختصار الاسم ليتوافق مع قوانين ديسكورد (الحد الأقصى 25 حرفاً)
             discord.SelectOption(
                 label="روم الالعاب",
                 description="نشر الإعلانات الخاصة بالألعاب وحساباتها",
@@ -213,6 +217,28 @@ class ChannelSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        # التحقق من الكول داون (ساعتين) قبل فتح المودال
+        user_id = interaction.user.id
+        current_time = time.time()
+
+        if user_id in _ad_cooldowns:
+            time_passed = current_time - _ad_cooldowns[user_id]
+            if time_passed < AD_COOLDOWN_DURATION:
+                time_left = AD_COOLDOWN_DURATION - time_passed
+                hours = int(time_left // 3600)
+                minutes = int((time_left % 3600) // 60)
+
+                time_msg = ""
+                if hours > 0:
+                    time_msg += f"{hours} ساعة و "
+                time_msg += f"{minutes} دقيقة"
+
+                await interaction.response.send_message(
+                    f"❌ عذراً، يجب عليك الانتظار **{time_msg}** قبل نشر إعلان آخر لمنع السبام!",
+                    ephemeral=True,
+                )
+                return
+
         chosen_channel_id = int(self.values[0])
         chosen_label = [o.label for o in self.options if o.value == self.values[0]][
             0
@@ -318,22 +344,6 @@ class TicketPanelView(discord.ui.View):
 
 
 # --- Slash commands ---
-@bot.tree.command(
-    name="set_trade_channel", description="تحديد الروم اللي تُنشر فيه الإعلانات"
-)
-@app_commands.checks.has_permissions(administrator=True)
-@app_commands.describe(channel="الروم المطلوب (اختياري، الافتراضي هو الروم الحالي)")
-async def set_trade_channel(
-    interaction: discord.Interaction, channel: discord.TextChannel = None
-):
-    global trade_channel_id
-    channel = channel or interaction.channel
-    trade_channel_id = channel.id
-    await interaction.response.send_message(
-        f"✅ سيتم نشر جميع الإعلانات في {channel.mention} من الآن.", ephemeral=True
-    )
-
-
 @bot.tree.command(name="setup_trade", description="نشر لوحة نشر الإعلانات")
 @app_commands.checks.has_permissions(administrator=True)
 async def setup_trade(interaction: discord.Interaction):
@@ -491,7 +501,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             await member.add_roles(role)
 
 
-@set_trade_channel.error
 @setup_trade.error
 @setup_verify.error
 @setup_ticket.error
@@ -527,4 +536,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+        
