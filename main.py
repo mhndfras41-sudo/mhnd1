@@ -518,12 +518,12 @@ async def admin_command_error(
 
 @bot.event
 async def on_ready():
-    # ⚠️ آيدي سيرفرك الشخصي لحماية البوت
-    MY_SERVER_ID = 1385604691097948260
+    # ⚠️ آيدي السيرفرات المسموح بها (البوت لن يعمل إلا هنا)
+    ALLOWED_SERVER_IDS = [1385604691097948260, 1458158549829030054]
 
-    # الخروج التلقائي من أي سيرفر غريب لحماية كودك
+    # الخروج التلقائي من أي سيرفر غريب
     for guild in bot.guilds:
-        if guild.id != MY_SERVER_ID:
+        if guild.id not in ALLOWED_SERVER_IDS:
             print(
                 f"⚠️ البوت حاول الدخول لسيرفر غريب ({guild.name}) وتم الخروج تلقائياً!"
             )
@@ -547,4 +547,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
+                
