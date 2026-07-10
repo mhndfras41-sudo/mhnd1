@@ -1,0 +1,469 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+import math
+import os
+import random
+import re
+import threading
+import time
+from flask import Flask
+
+# --- 24/7 keep-alive web server ---
+app = Flask(__name__)
+
+
+@app.route("/")
+def home():
+    return "Bot is Alive!"
+
+
+def run_web_server():
+    app.run(host="0.0.0.0", port=8000)
+
+
+def keep_alive():
+    t = threading.Thread(target=run_web_server)
+    t.start()
+
+
+# --- Bot setup ---
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --- Trade channel configuration (in-memory) ---
+trade_channel_id = None
+
+# --- Verification configuration (in-memory) ---
+verify_message_id = None
+verify_role_ids = []
+
+# --- Ticket configuration (in-memory) ---
+ticket_staff_role_id = None
+ticket_category_id = None
+ticket_counter = 0
+
+# --- Verification lock: prevents double role-assignment from rapid remove/re-add ---
+import asyncio
+
+_verify_lock = asyncio.Lock()
+
+# --- Tax configuration (in-memory) ---
+tax_channel_id = None
+TAX_RATE = 0.05  # نسبة ثابتة 5%
+
+
+_AMOUNT_RE = re.compile(r"^\d{1,12}(\.\d{1,4})?[mk]?$")
+MAX_TAX_AMOUNT = 1_000_000_000_000  # حد أعلى منطقي لمنع القيم الشاذة
+
+# --- Simple per-user cooldown against tax-reply spam ---
+_last_tax_reply = {}
+TAX_COOLDOWN_SECONDS = 5
+
+
+def parse_amount(text: str):
+    """يحول '1m' / '10m' / '500k' / '2500' إلى رقم. يرجع None لو الصيغة غير صحيحة أو خارج الحدود."""
+    text = text.strip().lower().replace(",", "")
+    if not text or not _AMOUNT_RE.match(text):
+        return None
+    multiplier = 1
+    if text.endswith("m"):
+        multiplier = 1_000_000
+        text = text[:-1]
+    elif text.endswith("k"):
+        multiplier = 1_000
+        text = text[:-1]
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    if not (value == value) or value in (float("inf"), float("-inf")):
+        return None
+    result = value * multiplier
+    if result <= 0 or result > MAX_TAX_AMOUNT:
+        return None
+    return result
+
+
+def format_amount(value: float) -> str:
+    if value == int(value):
+        return f"{int(value):,}"
+    return f"{value:,.2f}"
+
+
+# --- Ad posting modal (fully readable, no obfuscation) ---
+class AdModal(discord.ui.Modal, title="انشر إعلان بيع"):
+    item = discord.ui.TextInput(
+        label="اسم المنتج / الحساب",
+        placeholder="مثال: حساب ببجي، 5000 روبكس...",
+        required=True,
+        max_length=100,
+    )
+    price = discord.ui.TextInput(
+        label="السعر",
+        placeholder="مثال: 50 ريال",
+        required=True,
+        max_length=50,
+    )
+    details = discord.ui.TextInput(
+        label="تفاصيل إضافية",
+        style=discord.TextStyle.paragraph,
+        placeholder="وصف المنتج، طريقة التسليم، إلخ...",
+        required=False,
+        max_length=500,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="📦 إعلان جديد", color=discord.Color.green())
+        embed.add_field(name="المنتج", value=self.item.value, inline=False)
+        embed.add_field(name="السعر", value=self.price.value, inline=False)
+        if self.details.value:
+            embed.add_field(name="التفاصيل", value=self.details.value, inline=False)
+        embed.set_author(
+            name=interaction.user.display_name,
+            icon_url=interaction.user.display_avatar.url,
+        )
+        embed.set_footer(text=f"البائع: {interaction.user}")
+
+        view = ContactButton(interaction.user.id)
+        target_channel = interaction.channel
+        if trade_channel_id:
+            channel = interaction.guild.get_channel(trade_channel_id)
+            if channel:
+                target_channel = channel
+        await target_channel.send(embed=embed, view=view)
+        if target_channel.id == interaction.channel.id:
+            await interaction.response.send_message(
+                "✅ تم نشر إعلانك بنجاح!", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"✅ تم نشر إعلانك في {target_channel.mention}", ephemeral=True
+            )
+
+
+class ContactButton(discord.ui.View):
+    def __init__(self, seller_id: int):
+        super().__init__(timeout=None)
+        self.add_item(
+            discord.ui.Button(
+                label="تواصل مع البائع",
+                style=discord.ButtonStyle.link,
+                url=f"https://discord.com/users/{seller_id}",
+            )
+        )
+
+
+class TradePanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="📢 انشر إعلانك", style=discord.ButtonStyle.primary, custom_id="post_ad"
+    )
+    async def post_ad(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await interaction.response.send_modal(AdModal())
+
+
+# --- Ticket system ---
+class CloseTicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="🔒 إغلاق التذكرة",
+        style=discord.ButtonStyle.danger,
+        custom_id="close_ticket",
+    )
+    async def close_ticket(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await interaction.response.send_message(
+            "سيتم إغلاق التذكرة خلال 5 ثواني...", ephemeral=False
+        )
+        await interaction.channel.send("🔒 تم إغلاق التذكرة، جاري حذف الروم...")
+        import asyncio
+
+        await asyncio.sleep(5)
+        await interaction.channel.delete()
+
+
+class TicketPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="🎫 فتح تذكرة", style=discord.ButtonStyle.success, custom_id="open_ticket"
+    )
+    async def open_ticket(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        global ticket_counter
+        guild = interaction.guild
+
+        # Prevent duplicate open tickets for the same user
+        existing = discord.utils.get(
+            guild.text_channels, name=f"ticket-{interaction.user.name}".lower()
+        )
+        if existing:
+            await interaction.response.send_message(
+                f"لديك تذكرة مفتوحة بالفعل: {existing.mention}", ephemeral=True
+            )
+            return
+
+        ticket_counter += 1
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True
+            ),
+            guild.me: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True
+            ),
+        }
+        if ticket_staff_role_id:
+            staff_role = guild.get_role(ticket_staff_role_id)
+            if staff_role:
+                overwrites[staff_role] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True, read_message_history=True
+                )
+
+        category = guild.get_channel(ticket_category_id) if ticket_category_id else None
+
+        channel = await guild.create_text_channel(
+            name=f"ticket-{interaction.user.name}",
+            category=category,
+            overwrites=overwrites,
+            reason=f"تذكرة جديدة من {interaction.user}",
+        )
+
+        embed = discord.Embed(
+            title="🎫 تذكرة دعم جديدة",
+            description=f"أهلاً {interaction.user.mention}، اشرح مشكلتك أو استفسارك وسيقوم أحد المسؤولين بالرد عليك قريباً.",
+            color=discord.Color.blue(),
+        )
+        mention = f"<@&{ticket_staff_role_id}>" if ticket_staff_role_id else ""
+        await channel.send(content=mention, embed=embed, view=CloseTicketView())
+
+        await interaction.response.send_message(
+            f"✅ تم إنشاء تذكرتك: {channel.mention}", ephemeral=True
+        )
+
+
+# --- Slash commands ---
+@bot.tree.command(
+    name="set_trade_channel", description="تحديد الروم اللي تُنشر فيه الإعلانات"
+)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(channel="الروم المطلوب (اختياري، الافتراضي هو الروم الحالي)")
+async def set_trade_channel(
+    interaction: discord.Interaction, channel: discord.TextChannel = None
+):
+    global trade_channel_id
+    channel = channel or interaction.channel
+    trade_channel_id = channel.id
+    await interaction.response.send_message(
+        f"✅ سيتم نشر جميع الإعلانات في {channel.mention} من الآن.", ephemeral=True
+    )
+
+
+@bot.tree.command(name="setup_trade", description="نشر لوحة نشر الإعلانات")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_trade(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🛒 سوق التجارة",
+        description="اضغط الزر أدناه لنشر إعلان بيع واضح يشوفه الجميع.",
+        color=discord.Color.blurple(),
+    )
+    await interaction.response.send_message(embed=embed, view=TradePanelView())
+
+
+@bot.tree.command(
+    name="setup_verify",
+    description="نشر رسالة التحقق التي تمنح رتبة عشوائية عند الضغط على ✅",
+)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    role1="الرتبة الأولى (إجبارية)",
+    role2="الرتبة الثانية (اختياري)",
+    role3="الرتبة الثالثة (اختياري)",
+    role4="الرتبة الرابعة (اختياري)",
+    role5="الرتبة الخامسة (اختياري)",
+)
+async def setup_verify(
+    interaction: discord.Interaction,
+    role1: discord.Role,
+    role2: discord.Role = None,
+    role3: discord.Role = None,
+    role4: discord.Role = None,
+    role5: discord.Role = None,
+):
+    global verify_message_id, verify_role_ids
+    roles = [r for r in [role1, role2, role3, role4, role5] if r is not None]
+    verify_role_ids = [r.id for r in roles]
+
+    roles_list = "\n".join(f"• {r.mention}" for r in roles)
+    embed = discord.Embed(
+        title="✅ إثبات الهوية",
+        description=(
+            "اضغط على الإيموجي ✅ أدناه لإثبات نفسك، وستحصل تلقائياً على رتبة عشوائية من الرتب التالية:\n\n"
+            f"{roles_list}"
+        ),
+        color=discord.Color.gold(),
+    )
+    await interaction.response.send_message(embed=embed)
+    msg = await interaction.original_response()
+    await msg.add_reaction("✅")
+    verify_message_id = msg.id
+
+
+@bot.tree.command(
+    name="setup_ticket", description="نشر لوحة فتح التذاكر للتواصل مع الإدارة"
+)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    staff_role="الرتبة (رتبة الإدارة/الدعم) التي تشاهد التذاكر",
+    category="القسم (الكاتيجوري) اللي تُنشأ فيه روومات التذاكر (اختياري)",
+)
+async def setup_ticket(
+    interaction: discord.Interaction,
+    staff_role: discord.Role = None,
+    category: discord.CategoryChannel = None,
+):
+    global ticket_staff_role_id, ticket_category_id
+    if staff_role:
+        ticket_staff_role_id = staff_role.id
+    if category:
+        ticket_category_id = category.id
+
+    embed = discord.Embed(
+        title="🎫 التواصل مع الإدارة",
+        description="إذا عندك موضوع أو استفسار تبي تكلم الإدارة فيه بشكل خاص، اضغط الزر أدناه وسيتم فتح روم خاص بينك وبين الإدارة.",
+        color=discord.Color.blue(),
+    )
+    await interaction.response.send_message(embed=embed, view=TicketPanelView())
+
+
+@bot.tree.command(
+    name="set_tax_channel",
+    description="تحديد الروم اللي يحسب فيه البوت ضريبة المبالغ تلقائياً",
+)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(channel="الروم المطلوب (اختياري، الافتراضي هو الروم الحالي)")
+async def set_tax_channel(
+    interaction: discord.Interaction, channel: discord.TextChannel = None
+):
+    global tax_channel_id
+    channel = channel or interaction.channel
+    tax_channel_id = channel.id
+    await interaction.response.send_message(
+        f"✅ تم تفعيل حساب الضريبة (5%) في {channel.mention}. فقط اكتب رقم مثل 1m أو 500k وسيرد البوت بالحساب.",
+        ephemeral=True,
+    )
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot:
+        return
+
+    if tax_channel_id and message.channel.id == tax_channel_id:
+        amount = parse_amount(message.content)
+        if amount is not None:
+            now = time.monotonic()
+            last = _last_tax_reply.get(message.author.id, 0)
+            if now - last >= TAX_COOLDOWN_SECONDS:
+                _last_tax_reply[message.author.id] = now
+                total_to_send = math.floor((amount * 20) / 19 + 1)
+                tax = total_to_send - amount
+                embed = discord.Embed(
+                    title="🧾 حساب الضريبة",
+                    description="حتى يستلم الطرف الثاني المبلغ كامل بعد ضريبة بروبوت، حوّل المبلغ الإجمالي أدناه.",
+                    color=discord.Color.orange(),
+                )
+                embed.add_field(
+                    name="المبلغ المطلوب أن يستلمه الطرف الثاني",
+                    value=format_amount(amount),
+                    inline=True,
+                )
+                embed.add_field(
+                    name="ضريبة بروبوت (5%)", value=format_amount(tax), inline=True
+                )
+                embed.add_field(
+                    name="💰 المبلغ الإجمالي المطلوب تحويله",
+                    value=format_amount(total_to_send),
+                    inline=False,
+                )
+                await message.reply(embed=embed)
+
+    await bot.process_commands(message)
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    if payload.message_id != verify_message_id:
+        return
+    if str(payload.emoji) != "✅":
+        return
+    if payload.member is None or payload.member.bot:
+        return
+    if not verify_role_ids:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    if guild is None:
+        return
+
+    async with _verify_lock:
+        # Re-fetch the member fresh so we see any role assigned by a
+        # concurrent reaction event that finished while we waited for the lock.
+        member = guild.get_member(payload.member.id) or payload.member
+        member_role_ids = {r.id for r in member.roles}
+        if member_role_ids.intersection(verify_role_ids):
+            return
+        chosen_role_id = random.choice(verify_role_ids)
+        role = guild.get_role(chosen_role_id)
+        if role is not None:
+            await member.add_roles(role)
+
+
+# --- Error handling for missing admin permissions ---
+@set_trade_channel.error
+@setup_trade.error
+@setup_verify.error
+@setup_ticket.error
+@set_tax_channel.error
+async def admin_command_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "يجب أن تكون أدمن لاستخدام هذا الأمر.", ephemeral=True
+        )
+    else:
+        raise error
+
+
+@bot.event
+async def on_ready():
+    bot.add_view(TradePanelView())
+    bot.add_view(TicketPanelView())
+    bot.add_view(CloseTicketView())
+    synced = await bot.tree.sync()
+    print(f"Logged in as {bot.user}", flush=True)
+    print(f"Synced {len(synced)} commands: {[c.name for c in synced]}", flush=True)
+
+
+def main():
+    token = os.environ.get("DISCORD_TOKEN")
+    if not token:
+        raise RuntimeError("DISCORD_TOKEN environment variable is not set.")
+    keep_alive()
+    bot.run(token)
+
+
+if __name__ == "__main__":
+    main()
