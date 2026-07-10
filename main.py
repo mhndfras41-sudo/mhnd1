@@ -46,6 +46,11 @@ _verify_lock = asyncio.Lock()
 tax_channel_id = None
 TAX_RATE = 0.05
 
+# --- [إضافات جديدة للوسيط والتقييم] ---
+ratings_channel_id = None
+mm_staff_role_id = None
+mm_category_id = None
+
 _AMOUNT_RE = re.compile(r"^\d{1,12}(\.\d{1,4})?[mk]?$")
 MAX_TAX_AMOUNT = 1_000_000_000_000
 
@@ -198,6 +203,27 @@ class TicketPanelView(discord.ui.View):
         await channel.send(content=mention, embed=embed, view=CloseTicketView())
         await interaction.response.send_message(f"✅ تم إنشاء تذكرتك: {channel.mention}", ephemeral=True)
 
+# --- نظام الوسيط الجديد ---
+class MM_Ticket_View(discord.ui.View):
+    def __init__(self): super().__init__(timeout=None)
+    @discord.ui.button(label="طلب وسيط للتبادل 🤝", style=discord.ButtonStyle.primary, custom_id="open_mm_mediator")
+    async def open_mm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        }
+        if mm_staff_role_id:
+            staff_role = guild.get_role(mm_staff_role_id)
+            if staff_role:
+                overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+                
+        category = guild.get_channel(mm_category_id) if mm_category_id else None
+        channel = await guild.create_text_channel(name=f"mm-{interaction.user.name}", category=category, overwrites=overwrites, reason=f"وسيط تبادل لـ {interaction.user}")
+        await channel.send(f"<@&{mm_staff_role_id}> وسيط مطلوب! {interaction.user.mention}", view=CloseTicketView())
+        await interaction.response.send_message(f"✅ تم فتح تذكرة الوسيط: {channel.mention}", ephemeral=True)
+
 # --- Slash commands ---
 @bot.tree.command(name="setup_trade", description="نشر لوحة نشر الإعلانات")
 @app_commands.checks.has_permissions(administrator=True)
@@ -236,6 +262,36 @@ async def set_tax_channel(interaction: discord.Interaction, channel: discord.Tex
     channel = channel or interaction.channel
     tax_channel_id = channel.id
     await interaction.response.send_message(f"✅ تم تفعيل حساب الضريبة (5%) في {channel.mention}.", ephemeral=True)
+
+# --- أوامر التقييم والوسيط الجديدة ---
+@bot.tree.command(name="setup_ticket_mediator", description="إعداد لوحة تكت الوسيط")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_ticket_mediator(interaction: discord.Interaction, staff_role: discord.Role, category: discord.CategoryChannel):
+    global mm_staff_role_id, mm_category_id
+    mm_staff_role_id, mm_category_id = staff_role.id, category.id
+    embed = discord.Embed(title="🤝 خدمة الوساطة", description="اضغط الزر أدناه لفتح تذكرة وساطة.", color=discord.Color.gold())
+    await interaction.response.send_message(embed=embed, view=MM_Ticket_View())
+
+@bot.tree.command(name="set_ratings_channel", description="تحديد روم التقييمات")
+@app_commands.checks.has_permissions(administrator=True)
+async def set_ratings_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    global ratings_channel_id
+    ratings_channel_id = channel.id
+    await interaction.response.send_message(f"✅ تم تحديد {channel.mention} كروم للتقييمات.", ephemeral=True)
+
+@bot.tree.command(name="rate", description="تقييم عضو")
+async def rate(interaction: discord.Interaction, user: discord.User, stars: app_commands.Range[int, 1, 5], comment: str = "لا يوجد تعليق"):
+    if not ratings_channel_id:
+        return await interaction.response.send_message("❌ لم يتم تحديد روم التقييمات.", ephemeral=True)
+    
+    channel = interaction.guild.get_channel(ratings_channel_id)
+    embed = discord.Embed(title="⭐ تقييم جديد", color=discord.Color.gold())
+    embed.add_field(name="التاجر", value=user.mention, inline=True)
+    embed.add_field(name="المقيم", value=interaction.user.mention, inline=True)
+    embed.add_field(name="التقييم", value=f"{'⭐' * stars}", inline=False)
+    embed.add_field(name="التعليق", value=comment, inline=False)
+    await channel.send(embed=embed)
+    await interaction.response.send_message("✅ تم إرسال تقييمك.", ephemeral=True)
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -284,6 +340,7 @@ async def on_ready():
     bot.add_view(TradePanelView())
     bot.add_view(TicketPanelView())
     bot.add_view(CloseTicketView())
+    bot.add_view(MM_Ticket_View()) # مهم جداً
     synced = await bot.tree.sync()
     print(f"Logged in as {bot.user} - Online inside Discord!", flush=True)
 
@@ -296,4 +353,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
