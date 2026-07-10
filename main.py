@@ -1,6 +1,4 @@
-import discord
-from discord import app_commands
-from discord.ext import commands
+import asyncio
 import math
 import os
 import random
@@ -8,6 +6,9 @@ import re
 import threading
 import time
 from flask import Flask
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 # --- 24/7 keep-alive web server ---
 app = Flask(__name__)
@@ -46,8 +47,6 @@ ticket_category_id = None
 ticket_counter = 0
 
 # --- Verification lock: prevents double role-assignment from rapid remove/re-add ---
-import asyncio
-
 _verify_lock = asyncio.Lock()
 
 # --- Tax configuration (in-memory) ---
@@ -93,27 +92,36 @@ def format_amount(value: float) -> str:
     return f"{value:,.2f}"
 
 
-# --- Ad posting modal (fully readable, no obfuscation) ---
-class AdModal(discord.ui.Modal, title="انشر إعلان بيع"):
-    item = discord.ui.TextInput(
-        label="اسم المنتج / الحساب",
-        placeholder="مثال: حساب ببجي، 5000 روبكس...",
-        required=True,
-        max_length=100,
-    )
-    price = discord.ui.TextInput(
-        label="السعر",
-        placeholder="مثال: 50 ريال",
-        required=True,
-        max_length=50,
-    )
-    details = discord.ui.TextInput(
-        label="تفاصيل إضافية",
-        style=discord.TextStyle.paragraph,
-        placeholder="وصف المنتج، طريقة التسليم، إلخ...",
-        required=False,
-        max_length=500,
-    )
+# --- Ad posting modal ---
+class AdModal(discord.ui.Modal):
+
+    def __init__(self, target_channel_id: int, channel_name: str):
+        super().__init__(title=f"انشر إعلان في قسم: {channel_name}")
+        self.target_channel_id = target_channel_id
+
+        self.item = discord.ui.TextInput(
+            label="اسم المنتج / الحساب",
+            placeholder="مثال: حساب ببجي، 5000 روبكس...",
+            required=True,
+            max_length=100,
+        )
+        self.price = discord.ui.TextInput(
+            label="السعر",
+            placeholder="مثال: 50 ريال",
+            required=True,
+            max_length=50,
+        )
+        self.details = discord.ui.TextInput(
+            label="تفاصيل إضافية",
+            style=discord.TextStyle.paragraph,
+            placeholder="وصف المنتج، طريقة التسليم، إلخ...",
+            required=False,
+            max_length=500,
+        )
+
+        self.add_item(self.item)
+        self.add_item(self.price)
+        self.add_item(self.details)
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = discord.Embed(title="📦 إعلان جديد", color=discord.Color.green())
@@ -128,23 +136,20 @@ class AdModal(discord.ui.Modal, title="انشر إعلان بيع"):
         embed.set_footer(text=f"البائع: {interaction.user}")
 
         view = ContactButton(interaction.user.id)
-        target_channel = interaction.channel
-        if trade_channel_id:
-            channel = interaction.guild.get_channel(trade_channel_id)
-            if channel:
-                target_channel = channel
+
+        target_channel = interaction.guild.get_channel(self.target_channel_id)
+        if not target_channel:
+            target_channel = interaction.channel
+
         await target_channel.send(embed=embed, view=view)
-        if target_channel.id == interaction.channel.id:
-            await interaction.response.send_message(
-                "✅ تم نشر إعلانك بنجاح!", ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                f"✅ تم نشر إعلانك في {target_channel.mention}", ephemeral=True
-            )
+        await interaction.response.send_message(
+            f"✅ تم نشر إعلانك بنجاح في {target_channel.mention}",
+            ephemeral=True,
+        )
 
 
 class ContactButton(discord.ui.View):
+
     def __init__(self, seller_id: int):
         super().__init__(timeout=None)
         self.add_item(
@@ -156,21 +161,77 @@ class ContactButton(discord.ui.View):
         )
 
 
+# --- القائمة المنسدلة المحدثة بالرومات الخاصة بك ---
+class ChannelSelect(discord.ui.Select):
+
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="روم الحسابات",
+                description="نشر الإعلانات الخاصة بالحسابات",
+                value="1524578445894615060",
+                emoji="👤",
+            ),
+            discord.SelectOption(
+                label="روم ديسكورد",
+                description="نشر الإعلانات الخاصة بسيرفرات أو خدمات ديسكورد",
+                value="1524578492262383787",
+                emoji="💬",
+            ),
+            discord.SelectOption(
+                label="روم التصاميم",
+                description="نشر الإعلانات الخاصة بالتصاميم والغرافيكس",
+                value="1524578533467488286",
+                emoji="🎨",
+            ),
+            # تم اختصار الاسم ليتوافق مع قوانين ديسكورد (الحد الأقصى 25 حرفاً)
+            discord.SelectOption(
+                label="روم الالعاب",
+                description="نشر الإعلانات الخاصة بالألعاب وحساباتها",
+                value="1524578615788830780",
+                emoji="🎮",
+            ),
+            discord.SelectOption(
+                label="روم طلبات",
+                description="نشر الطلبات والخدمات المطلوبة",
+                value="1525211150986383522",
+                emoji="📥",
+            ),
+            discord.SelectOption(
+                label="روم اخرى",
+                description="نشر الإعلانات المتنوعة الأخرى",
+                value="1524578574273745057",
+                emoji="⚙️",
+            ),
+        ]
+        super().__init__(
+            placeholder="اختر القسم الذي تريد نشر إعلانك فيه...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="select_ad_channel",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        chosen_channel_id = int(self.values[0])
+        chosen_label = [o.label for o in self.options if o.value == self.values[0]][
+            0
+        ]
+        await interaction.response.send_modal(
+            AdModal(target_channel_id=chosen_channel_id, channel_name=chosen_label)
+        )
+
+
 class TradePanelView(discord.ui.View):
+
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="📢 انشر إعلانك", style=discord.ButtonStyle.primary, custom_id="post_ad"
-    )
-    async def post_ad(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        await interaction.response.send_modal(AdModal())
+        self.add_item(ChannelSelect())
 
 
 # --- Ticket system ---
 class CloseTicketView(discord.ui.View):
+
     def __init__(self):
         super().__init__(timeout=None)
 
@@ -193,11 +254,14 @@ class CloseTicketView(discord.ui.View):
 
 
 class TicketPanelView(discord.ui.View):
+
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(
-        label="🎫 فتح تذكرة", style=discord.ButtonStyle.success, custom_id="open_ticket"
+        label="🎫 فتح تذكرة",
+        style=discord.ButtonStyle.success,
+        custom_id="open_ticket",
     )
     async def open_ticket(
         self, interaction: discord.Interaction, button: discord.ui.Button
@@ -205,7 +269,6 @@ class TicketPanelView(discord.ui.View):
         global ticket_counter
         guild = interaction.guild
 
-        # Prevent duplicate open tickets for the same user
         existing = discord.utils.get(
             guild.text_channels, name=f"ticket-{interaction.user.name}".lower()
         )
@@ -276,7 +339,7 @@ async def set_trade_channel(
 async def setup_trade(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🛒 سوق التجارة",
-        description="اضغط الزر أدناه لنشر إعلان بيع واضح يشوفه الجميع.",
+        description="اختر القسم المناسب من القائمة أدناه لنشر إعلانك فيه.",
         color=discord.Color.blurple(),
     )
     await interaction.response.send_message(embed=embed, view=TradePanelView())
@@ -418,8 +481,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         return
 
     async with _verify_lock:
-        # Re-fetch the member fresh so we see any role assigned by a
-        # concurrent reaction event that finished while we waited for the lock.
         member = guild.get_member(payload.member.id) or payload.member
         member_role_ids = {r.id for r in member.roles}
         if member_role_ids.intersection(verify_role_ids):
@@ -430,7 +491,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             await member.add_roles(role)
 
 
-# --- Error handling for missing admin permissions ---
 @set_trade_channel.error
 @setup_trade.error
 @setup_verify.error
@@ -467,3 +527,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
