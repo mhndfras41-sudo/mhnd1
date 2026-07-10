@@ -518,6 +518,17 @@ async def admin_command_error(
 
 @bot.event
 async def on_ready():
+    # ⚠️ آيدي سيرفرك الشخصي لحماية البوت
+    MY_SERVER_ID = 1385604691097948260
+
+    # الخروج التلقائي من أي سيرفر غريب لحماية كودك
+    for guild in bot.guilds:
+        if guild.id != MY_SERVER_ID:
+            print(
+                f"⚠️ البوت حاول الدخول لسيرفر غريب ({guild.name}) وتم الخروج تلقائياً!"
+            )
+            await guild.leave()
+
     bot.add_view(TradePanelView())
     bot.add_view(TicketPanelView())
     bot.add_view(CloseTicketView())
@@ -536,4 +547,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+            
