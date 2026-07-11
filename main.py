@@ -46,7 +46,7 @@ _verify_lock = asyncio.Lock()
 # --- Tax configuration (in-memory) ---
 tax_channel_id = None
 TAX_RATE = 0.05
-TAX_RATE_WASIT = 0.25
+TAX_RATE_WASIT = 0.05
 
 _AMOUNT_RE = re.compile(r"^\d{1,12}(\.\d{1,4})?[mk]?$")
 MAX_TAX_AMOUNT = 1_000_000_000_000
@@ -353,7 +353,7 @@ async def on_message(message: discord.Message):
                 embed.add_field(name="المبلغ الصافي", value=format_amount(amount), inline=False)
                 embed.add_field(name="ضريبة عادية (5%)", value=format_amount(tax_normal), inline=True)
                 embed.add_field(name="💰 الإجمالي (عادي)", value=format_amount(total_normal), inline=True)
-                embed.add_field(name="ضريبة وسيط (25%)", value=format_amount(tax_wasit), inline=True)
+                embed.add_field(name=f"ضريبة وسيط ({int(TAX_RATE_WASIT * 100)}%)", value=format_amount(tax_wasit), inline=True)
                 embed.add_field(name="💰 الإجمالي (وسيط)", value=format_amount(total_wasit), inline=True)
                 await message.reply(embed=embed)
     await bot.process_commands(message)
