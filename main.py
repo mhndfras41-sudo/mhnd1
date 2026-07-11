@@ -18,7 +18,8 @@ def home():
     return "Bot is Alive!"
 
 def run_web_server():
-    app.run(host='0.0.0.0', port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = threading.Thread(target=run_web_server)
@@ -45,6 +46,7 @@ _verify_lock = asyncio.Lock()
 # --- Tax configuration (in-memory) ---
 tax_channel_id = None
 TAX_RATE = 0.05
+TAX_RATE_WASIT = 0.25
 
 _AMOUNT_RE = re.compile(r"^\d{1,12}(\.\d{1,4})?[mk]?$")
 MAX_TAX_AMOUNT = 1_000_000_000_000
@@ -54,6 +56,13 @@ TAX_COOLDOWN_SECONDS = 5
 
 _ad_cooldowns = {}
 AD_COOLDOWN_DURATION = 7200
+
+# --- Rating configuration (in-memory) ---
+rating_channel_id = None
+
+# --- Middleman (وسيط) ticket configuration (in-memory) ---
+ticket_wasit_staff_role_id = None
+ticket_wasit_category_id = None
 
 def parse_amount(text: str):
     text = text.strip().lower().replace(",", "")
@@ -81,6 +90,11 @@ def format_amount(value: float) -> str:
     if value == int(value):
         return f"{int(value):,}"
     return f"{value:,.2f}"
+
+def compute_total_with_tax(amount: float, rate: float):
+    total = math.floor(amount / (1 - rate) + 1)
+    tax = total - amount
+    return total, tax
 
 # --- Ad posting modal ---
 class AdModal(discord.ui.Modal):
@@ -165,6 +179,39 @@ class CloseTicketView(discord.ui.View):
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
+class WasitTicketPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🤝 طلب وسيط", style=discord.ButtonStyle.success, custom_id="open_ticket_wasit")
+    async def open_ticket_wasit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+
+        existing = discord.utils.get(guild.text_channels, name=f"wasit-{interaction.user.name}".lower())
+        if existing:
+            await interaction.response.send_message(f"⚠️ لديك تكت وسيط مفتوح بالفعل: {existing.mention}. أغلقه أولاً قبل فتح تكت جديد.", ephemeral=True)
+            return
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        }
+        if ticket_wasit_staff_role_id:
+            staff_role = guild.get_role(ticket_wasit_staff_role_id)
+            if staff_role:
+                overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+
+        category = guild.get_channel(ticket_wasit_category_id) if ticket_wasit_category_id else None
+        channel = await guild.create_text_channel(name=f"wasit-{interaction.user.name}", category=category, overwrites=overwrites, reason=f"طلب وسيط جديد من {interaction.user}")
+
+        embed = discord.Embed(title="🤝 طلب وسيط", description=f"أهلاً {interaction.user.mention}، وضّح تفاصيل الصفقة (الطرف الثاني، المبلغ، المنتج/الخدمة) وسيتم تعيين وسيط موثوق للإشراف على الصفقة قريباً.", color=discord.Color.teal())
+        mention = f"<@&{ticket_wasit_staff_role_id}>" if ticket_wasit_staff_role_id else ""
+        await channel.send(content=mention, embed=embed, view=CloseTicketView())
+
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"✅ تم إنشاء تكت الوسيط: {channel.mention}", ephemeral=True)
+
 class TicketPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -174,7 +221,6 @@ class TicketPanelView(discord.ui.View):
         global ticket_counter
         guild = interaction.guild
         
-        # البحث عن تذكرة قديمة وحذفها
         existing = discord.utils.get(guild.text_channels, name=f"ticket-{interaction.user.name}".lower())
         if existing:
             await interaction.response.send_message("⚠️ لديك تذكرة قديمة، جاري حذفها لفتح تذكرة جديدة...", ephemeral=True)
@@ -198,7 +244,6 @@ class TicketPanelView(discord.ui.View):
         mention = f"<@&{ticket_staff_role_id}>" if ticket_staff_role_id else ""
         await channel.send(content=mention, embed=embed, view=CloseTicketView())
         
-        # إذا تم الرد بالفعل في ephemeral لا نحتاج إرسال رسالة أخرى
         if not interaction.response.is_done():
             await interaction.response.send_message(f"✅ تم إنشاء تذكرتك: {channel.mention}", ephemeral=True)
 
@@ -241,6 +286,57 @@ async def set_tax_channel(interaction: discord.Interaction, channel: discord.Tex
     tax_channel_id = channel.id
     await interaction.response.send_message(f"✅ تم تفعيل حساب الضريبة (5%) في {channel.mention}.", ephemeral=True)
 
+@bot.tree.command(name="setup_ticket_wasit", description="نشر لوحة طلب وسيط موثوق للإشراف على صفقات التجارة")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_ticket_wasit(interaction: discord.Interaction, staff_role: discord.Role=None, category: discord.CategoryChannel=None):
+    global ticket_wasit_staff_role_id, ticket_wasit_category_id
+    if staff_role: ticket_wasit_staff_role_id = staff_role.id
+    if category: ticket_wasit_category_id = category.id
+
+    embed = discord.Embed(title="🤝 طلب وسيط للصفقات", description="إذا تسوي صفقة بيع أو شراء وتبي وسيط موثوق يضمن حقوق الطرفين، اضغط الزر أدناه وسيتم فتح تكت خاص بالصفقة.", color=discord.Color.teal())
+    await interaction.response.send_message(embed=embed, view=WasitTicketPanelView())
+
+@bot.tree.command(name="set_rating_channel", description="تحديد الروم اللي يتم فيه نشر تقييمات الأعضاء")
+@app_commands.checks.has_permissions(administrator=True)
+async def set_rating_channel(interaction: discord.Interaction, channel: discord.TextChannel=None):
+    global rating_channel_id
+    channel = channel or interaction.channel
+    rating_channel_id = channel.id
+    await interaction.response.send_message(f"✅ تم تحديد روم التقييمات: {channel.mention}", ephemeral=True)
+
+@bot.tree.command(name="تقييم", description="قيّم عضو من 1 إلى 5 نجوم")
+@app_commands.describe(member="العضو الذي تريد تقييمه", stars="عدد النجوم من 1 إلى 5", reason="سبب التقييم")
+@app_commands.choices(stars=[
+    app_commands.Choice(name="⭐ (1)", value=1),
+    app_commands.Choice(name="⭐⭐ (2)", value=2),
+    app_commands.Choice(name="⭐⭐⭐ (3)", value=3),
+    app_commands.Choice(name="⭐⭐⭐⭐ (4)", value=4),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐ (5)", value=5),
+])
+async def rate_member(interaction: discord.Interaction, member: discord.Member, stars: app_commands.Choice[int], reason: str):
+    if member.id == interaction.user.id:
+        await interaction.response.send_message("❌ لا يمكنك تقييم نفسك.", ephemeral=True)
+        return
+    if member.bot:
+        await interaction.response.send_message("❌ لا يمكنك تقييم بوت.", ephemeral=True)
+        return
+
+    stars_value = stars.value
+    stars_display = "⭐" * stars_value + "☆" * (5 - stars_value)
+
+    embed = discord.Embed(title="⭐ تقييم جديد", color=discord.Color.gold())
+    embed.add_field(name="الشخص المُقيِّم", value=interaction.user.mention, inline=True)
+    embed.add_field(name="الشخص المُقيَّم", value=member.mention, inline=True)
+    embed.add_field(name="التقييم", value=f"{stars_display} ({stars_value}/5)", inline=False)
+    embed.add_field(name="السبب", value=reason, inline=False)
+    embed.set_footer(text=f"بواسطة {interaction.user}", icon_url=interaction.user.display_avatar.url)
+
+    target_channel = interaction.guild.get_channel(rating_channel_id) if rating_channel_id else None
+    target_channel = target_channel or interaction.channel
+
+    await target_channel.send(embed=embed)
+    await interaction.response.send_message(f"✅ تم نشر تقييمك في {target_channel.mention}", ephemeral=True)
+
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot: return
@@ -251,12 +347,14 @@ async def on_message(message: discord.Message):
             last = _last_tax_reply.get(message.author.id, 0)
             if now - last >= TAX_COOLDOWN_SECONDS:
                 _last_tax_reply[message.author.id] = now
-                total_to_send = math.floor((amount * 20) / 19 + 1)
-                tax = total_to_send - amount
-                embed = discord.Embed(title="🧾 حساب الضريبة", description="حوّل المبلغ الإجمالي أدناه ليصل كاملاً للطرف الثاني.", color=discord.Color.orange())
-                embed.add_field(name="المبلغ الصافي", value=format_amount(amount), inline=True)
-                embed.add_field(name="الضريبة (5%)", value=format_amount(tax), inline=True)
-                embed.add_field(name="💰 المبلغ الإجمالي للتحويل", value=format_amount(total_to_send), inline=False)
+                total_normal, tax_normal = compute_total_with_tax(amount, TAX_RATE)
+                total_wasit, tax_wasit = compute_total_with_tax(amount, TAX_RATE_WASIT)
+                embed = discord.Embed(title="🧾 حساب الضريبة", description="حوّل المبلغ الإجمالي أدناه حسب نوع الصفقة ليصل كاملاً للطرف الثاني.", color=discord.Color.orange())
+                embed.add_field(name="المبلغ الصافي", value=format_amount(amount), inline=False)
+                embed.add_field(name="ضريبة عادية (5%)", value=format_amount(tax_normal), inline=True)
+                embed.add_field(name="💰 الإجمالي (عادي)", value=format_amount(total_normal), inline=True)
+                embed.add_field(name="ضريبة وسيط (25%)", value=format_amount(tax_wasit), inline=True)
+                embed.add_field(name="💰 الإجمالي (وسيط)", value=format_amount(total_wasit), inline=True)
                 await message.reply(embed=embed)
     await bot.process_commands(message)
 
@@ -278,6 +376,8 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 @setup_verify.error
 @setup_ticket.error
 @set_tax_channel.error
+@setup_ticket_wasit.error
+@set_rating_channel.error
 async def admin_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("يجب أن تكون أدمن لاستخدام هذا الأمر.", ephemeral=True)
@@ -287,6 +387,7 @@ async def admin_command_error(interaction: discord.Interaction, error: app_comma
 async def on_ready():
     bot.add_view(TradePanelView())
     bot.add_view(TicketPanelView())
+    bot.add_view(WasitTicketPanelView())
     bot.add_view(CloseTicketView())
     synced = await bot.tree.sync()
     print(f"Logged in as {bot.user} - Online inside Discord!", flush=True)
@@ -300,4 +401,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
