@@ -140,4 +140,6 @@ async def transh(ctx):
     embed.set_footer(text="Keep buying to grow your balance!")
     await ctx.send(embed=embed)
 
-bot.run('MTUyNDU3MDM3MzAyNTE3MzU2NA.GhnXP8.quzYKGQkkxusSzZABPRiWHUCNG9_DBCW1KouGw')
+# تشغيل البوت عبر متغير البيئة في Railway
+TOKEN = os.environ.get("DISCORD_TOKEN")
+bot.run(TOKEN)
