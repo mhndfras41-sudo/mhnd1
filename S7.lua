@@ -1,625 +1,391 @@
 -- ====================================================
--- S7 ULTRA SPAM ENGINE V11 - نسخة مصلحة ومضمونة
+-- 2U - ADMIN PLUS | HD Command Spammer (V3 - Ultra Fast + Persistent)
 -- ====================================================
+-- واجهة احترافية للسبام أوامر HD Admin عبر RequestCommandModification
+
 repeat wait() until game.Players.LocalPlayer
 local player = game.Players.LocalPlayer
 local replicated = game:GetService("ReplicatedStorage")
 local runService = game:GetService("RunService")
-local lighting = game:GetService("Lighting")
-local coreGui = game:GetService("CoreGui")
+local inputService = game:GetService("UserInputService")
 local tweenService = game:GetService("TweenService")
-local players = game:GetService("Players")
-
-print("🚀 بدء تشغيل S7 V11...")
 
 -- ====================================================
--- إنشاء الواجهة
+-- الإعدادات
+-- ====================================================
+local CONFIG = {
+    PrimaryRed = Color3.fromRGB(220, 0, 0),
+    DarkRed = Color3.fromRGB(80, 0, 0),
+    Black = Color3.fromRGB(8, 8, 8),
+    Gray = Color3.fromRGB(25, 25, 25),
+    TextColor = Color3.fromRGB(255, 255, 255),
+    SubText = Color3.fromRGB(200, 100, 100)
+}
+
+-- ====================================================
+-- الواجهة الرئيسية
 -- ====================================================
 local gui = Instance.new("ScreenGui")
-gui.Name = "S7_Spam"
-gui.Parent = player:WaitForChild("PlayerGui")
+gui.Name = "2U_AdminPlus"
+gui.Parent = player.PlayerGui
 gui.ResetOnSpawn = false
-
-if not gui.Parent then
-    gui.Parent = coreGui
-    print("⚠️ تم استخدام CoreGui بدلاً من PlayerGui")
-end
-
-print("✅ تم إنشاء ScreenGui")
+gui.IgnoreGuiInset = true
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 550, 0, 520)
-main.Position = UDim2.new(0.5, -275, 0.5, -260)
-main.BackgroundColor3 = Color3.fromRGB(8, 8, 18)
-main.BackgroundTransparency = 0.05
-main.BorderSizePixel = 3
-main.BorderColor3 = Color3.fromRGB(0, 255, 200)
+main.Size = UDim2.new(0, 480, 0, 420)
+main.Position = UDim2.new(0.5, -240, 0.5, -210)
+main.BackgroundColor3 = CONFIG.Black
+main.BorderSizePixel = 2
+main.BorderColor3 = CONFIG.PrimaryRed
 main.Active = true
 main.Draggable = true
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 16)
 main.Parent = gui
-main.Visible = true
-print("✅ تم إنشاء الإطار الرئيسي")
+
+local glow = Instance.new("UIStroke", main)
+glow.Color = CONFIG.PrimaryRed
+glow.Thickness = 2
+glow.Transparency = 0.4
 
 -- ====================================================
--- باقي الكود كما هو (لم يتغير)
+-- شريط العنوان
 -- ====================================================
-local glowBg = Instance.new("Frame")
-glowBg.Size = UDim2.new(1, 20, 1, 20)
-glowBg.Position = UDim2.new(-0.02, 0, -0.02, 0)
-glowBg.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
-glowBg.BackgroundTransparency = 0.85
-glowBg.BorderSizePixel = 0
-Instance.new("UICorner", glowBg).CornerRadius = UDim.new(0, 18)
-glowBg.Parent = main
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 50)
+header.BackgroundColor3 = CONFIG.PrimaryRed
+header.BorderSizePixel = 0
+Instance.new("UICorner", header).CornerRadius = UDim.new(0, 16)
+header.Parent = main
 
-local title = Instance.new("Frame")
-title.Size = UDim2.new(1, 0, 0, 50)
-title.BackgroundColor3 = Color3.fromRGB(0, 200, 150)
-title.BackgroundTransparency = 0.15
-Instance.new("UICorner", title).CornerRadius = UDim.new(0, 14)
-title.Parent = main
+local logoCircle = Instance.new("Frame")
+logoCircle.Size = UDim2.new(0, 34, 0, 34)
+logoCircle.Position = UDim2.new(0, 12, 0, 8)
+logoCircle.BackgroundColor3 = CONFIG.Black
+logoCircle.BorderSizePixel = 2
+logoCircle.BorderColor3 = CONFIG.PrimaryRed
+Instance.new("UICorner", logoCircle).CornerRadius = UDim.new(1, 0)
+logoCircle.Parent = header
 
-local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1, -70, 1, 0)
-titleText.Position = UDim2.new(0, 15, 0, 0)
-titleText.BackgroundTransparency = 1
-titleText.Text = "⚡ S7 ULTRA SPAM ENGINE V11"
-titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleText.TextSize = 20
-titleText.Font = Enum.Font.GothamBold
-titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Parent = title
+local logoText = Instance.new("TextLabel")
+logoText.Size = UDim2.new(1, 0, 1, 0)
+logoText.BackgroundTransparency = 1
+logoText.Text = "2U"
+logoText.TextColor3 = CONFIG.PrimaryRed
+logoText.TextSize = 14
+logoText.Font = Enum.Font.GothamBlack
+logoText.Parent = logoCircle
 
-local hideBtn = Instance.new("TextButton")
-hideBtn.Size = UDim2.new(0, 80, 0, 35)
-hideBtn.Position = UDim2.new(1, -130, 0, 7)
-hideBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-hideBtn.BackgroundTransparency = 0.2
-hideBtn.Text = "🔽 إخفاء"
-hideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-hideBtn.TextSize = 13
-hideBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", hideBtn).CornerRadius = UDim.new(0, 8)
-hideBtn.Parent = title
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Size = UDim2.new(1, -160, 1, 0)
+headerTitle.Position = UDim2.new(0, 55, 0, 0)
+headerTitle.BackgroundTransparency = 1
+headerTitle.Text = "2U • ADMIN PLUS"
+headerTitle.TextColor3 = CONFIG.TextColor
+headerTitle.TextSize = 18
+headerTitle.Font = Enum.Font.GothamBold
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.Parent = header
 
-local close = Instance.new("TextButton")
-close.Size = UDim2.new(0, 35, 0, 35)
-close.Position = UDim2.new(1, -42, 0, 7)
-close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-close.Text = "✕"
-close.TextColor3 = Color3.fromRGB(255, 255, 255)
-close.TextSize = 18
-close.Font = Enum.Font.GothamBold
-Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
-close.Parent = title
-close.MouseButton1Click:Connect(function() gui:Destroy() end)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 34, 0, 34)
+closeBtn.Position = UDim2.new(1, -46, 0, 8)
+closeBtn.BackgroundColor3 = CONFIG.Black
+closeBtn.BackgroundTransparency = 0.3
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = CONFIG.TextColor
+closeBtn.TextSize = 18
+closeBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
+closeBtn.Parent = header
 
-local showBtn = Instance.new("TextButton")
-showBtn.Size = UDim2.new(0, 80, 0, 40)
-showBtn.Position = UDim2.new(0.5, -40, 0.5, -20)
-showBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 150)
-showBtn.BackgroundTransparency = 0.1
-showBtn.Text = "🔓 إظهار"
-showBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-showBtn.TextSize = 16
-showBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", showBtn).CornerRadius = UDim.new(0, 10)
-showBtn.Visible = false
-showBtn.Parent = gui
-
-local function toggleUI(show)
-    main.Visible = show
-    showBtn.Visible = not show
-end
-
-hideBtn.MouseButton1Click:Connect(function() toggleUI(false) end)
-showBtn.MouseButton1Click:Connect(function() toggleUI(true) end)
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 34, 0, 34)
+minBtn.Position = UDim2.new(1, -86, 0, 8)
+minBtn.BackgroundColor3 = CONFIG.Black
+minBtn.BackgroundTransparency = 0.3
+minBtn.Text = "—"
+minBtn.TextColor3 = CONFIG.TextColor
+minBtn.TextSize = 18
+minBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 8)
+minBtn.Parent = header
 
 -- ====================================================
--- الأزرار العلوية
+-- TextBox الأوامر
 -- ====================================================
-local tabFrame = Instance.new("Frame")
-tabFrame.Size = UDim2.new(1, -20, 0, 40)
-tabFrame.Position = UDim2.new(0, 10, 0, 55)
-tabFrame.BackgroundTransparency = 1
-tabFrame.Parent = main
-
-local function createTab(text, x)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 120, 1, -5)
-    btn.Position = UDim2.new(0, x, 0, 2)
-    btn.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
-    btn.BackgroundTransparency = 0.2
-    btn.BorderSizePixel = 1
-    btn.BorderColor3 = Color3.fromRGB(0, 200, 150)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 13
-    btn.Font = Enum.Font.GothamBold
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    btn.Parent = tabFrame
-    return btn
-end
-
-local tab1 = createTab("📝 سبام", 5)
-local tab2 = createTab("🎯 صمله", 130)
-local tab3 = createTab("🛡️ حماية", 255)
-local tab4 = createTab("⚡ إضافات", 380)
-
--- ====================================================
--- الصفحات
--- ====================================================
-local pageContainer = Instance.new("Frame")
-pageContainer.Size = UDim2.new(1, -20, 1, -120)
-pageContainer.Position = UDim2.new(0, 10, 0, 100)
-pageContainer.BackgroundTransparency = 1
-pageContainer.Parent = main
-
--- صفحة السبام
-local page1 = Instance.new("Frame")
-page1.Size = UDim2.new(1, 0, 1, 0)
-page1.BackgroundTransparency = 1
-page1.Parent = pageContainer
-
-local cmdLabel = Instance.new("TextLabel")
-cmdLabel.Size = UDim2.new(0, 120, 0, 30)
-cmdLabel.Position = UDim2.new(0, 0, 0, 5)
-cmdLabel.BackgroundTransparency = 1
-cmdLabel.Text = "📝 الأمر + الهدف:"
-cmdLabel.TextColor3 = Color3.fromRGB(180, 200, 220)
-cmdLabel.TextSize = 14
-cmdLabel.Font = Enum.Font.GothamMedium
-cmdLabel.TextXAlignment = Enum.TextXAlignment.Left
-cmdLabel.Parent = page1
+local label1 = Instance.new("TextLabel")
+label1.Size = UDim2.new(1, -30, 0, 22)
+label1.Position = UDim2.new(0, 15, 0, 60)
+label1.BackgroundTransparency = 1
+label1.Text = "📝  HD ADMIN COMMAND"
+label1.TextColor3 = CONFIG.SubText
+label1.TextSize = 13
+label1.Font = Enum.Font.GothamBold
+label1.TextXAlignment = Enum.TextXAlignment.Left
+label1.Parent = main
 
 local cmdBox = Instance.new("TextBox")
-cmdBox.Size = UDim2.new(0, 300, 0, 35)
-cmdBox.Position = UDim2.new(0, 130, 0, 2)
-cmdBox.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
-cmdBox.BackgroundTransparency = 0.2
-cmdBox.BorderSizePixel = 1
-cmdBox.BorderColor3 = Color3.fromRGB(0, 255, 200)
-cmdBox.Text = "/re me"
-cmdBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+cmdBox.Size = UDim2.new(1, -30, 0, 42)
+cmdBox.Position = UDim2.new(0, 15, 0, 85)
+cmdBox.BackgroundColor3 = CONFIG.Gray
+cmdBox.BackgroundTransparency = 0.1
+cmdBox.BorderSizePixel = 2
+cmdBox.BorderColor3 = CONFIG.PrimaryRed
+cmdBox.Text = "/re"
+cmdBox.PlaceholderText = "اكتب الأمر هنا... مثال: /re"
+cmdBox.TextColor3 = CONFIG.TextColor
+cmdBox.PlaceholderColor3 = CONFIG.SubText
 cmdBox.TextSize = 15
-cmdBox.Font = Enum.Font.SourceSansBold
+cmdBox.Font = Enum.Font.Code
 cmdBox.ClearTextOnFocus = false
+cmdBox.TextXAlignment = Enum.TextXAlignment.Left
 Instance.new("UICorner", cmdBox).CornerRadius = UDim.new(0, 8)
-cmdBox.Parent = page1
+cmdBox.Parent = main
 
-local speedLabel = Instance.new("TextLabel")
-speedLabel.Size = UDim2.new(0, 120, 0, 30)
-speedLabel.Position = UDim2.new(0, 0, 0, 45)
-speedLabel.BackgroundTransparency = 1
-speedLabel.Text = "⏱️ السرعة (ث):"
-speedLabel.TextColor3 = Color3.fromRGB(180, 200, 220)
-speedLabel.TextSize = 14
-speedLabel.Font = Enum.Font.GothamMedium
-speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-speedLabel.Parent = page1
+-- ====================================================
+-- زر السبام
+-- ====================================================
+local spamBtn = Instance.new("TextButton")
+spamBtn.Size = UDim2.new(1, -30, 0, 46)
+spamBtn.Position = UDim2.new(0, 15, 0, 138)
+spamBtn.BackgroundColor3 = CONFIG.PrimaryRed
+spamBtn.BackgroundTransparency = 0.1
+spamBtn.BorderSizePixel = 2
+spamBtn.BorderColor3 = CONFIG.TextColor
+spamBtn.Text = "▶  START SPAM"
+spamBtn.TextColor3 = CONFIG.TextColor
+spamBtn.TextSize = 17
+spamBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", spamBtn).CornerRadius = UDim.new(0, 10)
+spamBtn.Parent = main
+
+local spamGlow = Instance.new("UIStroke", spamBtn)
+spamGlow.Color = CONFIG.TextColor
+spamGlow.Thickness = 2
+spamGlow.Transparency = 0.5
+
+-- ====================================================
+-- TextBox السرعة
+-- ====================================================
+local label2 = Instance.new("TextLabel")
+label2.Size = UDim2.new(1, -30, 0, 22)
+label2.Position = UDim2.new(0, 15, 0, 195)
+label2.BackgroundTransparency = 1
+label2.Text = "⚡  SPEED  ( 0 = أقصى سرعة )"
+label2.TextColor3 = CONFIG.SubText
+label2.TextSize = 13
+label2.Font = Enum.Font.GothamBold
+label2.TextXAlignment = Enum.TextXAlignment.Left
+label2.Parent = main
 
 local speedBox = Instance.new("TextBox")
-speedBox.Size = UDim2.new(0, 100, 0, 35)
-speedBox.Position = UDim2.new(0, 130, 0, 42)
-speedBox.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
-speedBox.BackgroundTransparency = 0.2
-speedBox.BorderSizePixel = 1
-speedBox.BorderColor3 = Color3.fromRGB(0, 255, 200)
-speedBox.Text = "0.1"
-speedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedBox.Size = UDim2.new(0, 150, 0, 42)
+speedBox.Position = UDim2.new(0, 15, 0, 220)
+speedBox.BackgroundColor3 = CONFIG.Gray
+speedBox.BackgroundTransparency = 0.1
+speedBox.BorderSizePixel = 2
+speedBox.BorderColor3 = CONFIG.PrimaryRed
+speedBox.Text = "0"
+speedBox.PlaceholderText = "0"
+speedBox.TextColor3 = CONFIG.TextColor
+speedBox.PlaceholderColor3 = CONFIG.SubText
 speedBox.TextSize = 15
-speedBox.Font = Enum.Font.SourceSansBold
+speedBox.Font = Enum.Font.Code
 speedBox.ClearTextOnFocus = false
 Instance.new("UICorner", speedBox).CornerRadius = UDim.new(0, 8)
-speedBox.Parent = page1
-
-local startBtn = Instance.new("TextButton")
-startBtn.Size = UDim2.new(0, 160, 0, 45)
-startBtn.Position = UDim2.new(0, 0, 0, 90)
-startBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-startBtn.BackgroundTransparency = 0.15
-startBtn.BorderSizePixel = 2
-startBtn.BorderColor3 = Color3.fromRGB(0, 255, 150)
-startBtn.Text = "▶ بدء السبام"
-startBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-startBtn.TextSize = 16
-startBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0, 10)
-startBtn.Parent = page1
-
-local stopBtn = Instance.new("TextButton")
-stopBtn.Size = UDim2.new(0, 160, 0, 45)
-stopBtn.Position = UDim2.new(0.5, -80, 0, 90)
-stopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-stopBtn.BackgroundTransparency = 0.15
-stopBtn.BorderSizePixel = 2
-stopBtn.BorderColor3 = Color3.fromRGB(255, 80, 80)
-stopBtn.Text = "⏹ إيقاف"
-stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-stopBtn.TextSize = 16
-stopBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 10)
-stopBtn.Parent = page1
-
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, 0, 0, 30)
-status.Position = UDim2.new(0, 0, 0, 145)
-status.BackgroundTransparency = 1
-status.Text = "🟢 جاهز"
-status.TextColor3 = Color3.fromRGB(0, 255, 100)
-status.TextSize = 14
-status.Font = Enum.Font.GothamMedium
-status.Parent = page1
-
-local log = Instance.new("TextBox")
-log.Size = UDim2.new(1, 0, 0, 80)
-log.Position = UDim2.new(0, 0, 0, 180)
-log.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
-log.BackgroundTransparency = 0.2
-log.BorderSizePixel = 1
-log.BorderColor3 = Color3.fromRGB(0, 200, 150)
-log.Text = "✅ جاهز..."
-log.TextColor3 = Color3.fromRGB(150, 180, 200)
-log.TextSize = 12
-log.Font = Enum.Font.SourceSans
-log.TextXAlignment = Enum.TextXAlignment.Left
-log.TextYAlignment = Enum.TextYAlignment.Top
-log.ClearTextOnFocus = false
-Instance.new("UICorner", log).CornerRadius = UDim.new(0, 8)
-log.Parent = page1
-
-local function addLogMsg(msg)
-    local current = log.Text
-    if current == "✅ جاهز..." then current = "" end
-    local lines = {}
-    for line in current:gmatch("[^\n]+") do
-        table.insert(lines, line)
-    end
-    table.insert(lines, os.date("%H:%M:%S") .. " | " .. msg)
-    if #lines > 12 then table.remove(lines, 1) end
-    log.Text = table.concat(lines, "\n")
-end
+speedBox.Parent = main
 
 -- ====================================================
--- صفحة الصمله
+-- شريط الحالة
 -- ====================================================
-local page2 = Instance.new("Frame")
-page2.Size = UDim2.new(1, 0, 1, 0)
-page2.BackgroundTransparency = 1
-page2.Visible = false
-page2.Parent = pageContainer
+local statusFrame = Instance.new("Frame")
+statusFrame.Size = UDim2.new(1, -30, 0, 60)
+statusFrame.Position = UDim2.new(0, 15, 0, 275)
+statusFrame.BackgroundColor3 = CONFIG.Gray
+statusFrame.BackgroundTransparency = 0.2
+statusFrame.BorderSizePixel = 1
+statusFrame.BorderColor3 = CONFIG.DarkRed
+Instance.new("UICorner", statusFrame).CornerRadius = UDim.new(0, 8)
+statusFrame.Parent = main
 
-local userLabel = Instance.new("TextLabel")
-userLabel.Size = UDim2.new(0, 120, 0, 30)
-userLabel.Position = UDim2.new(0, 0, 0, 5)
-userLabel.BackgroundTransparency = 1
-userLabel.Text = "👤 اسم المستخدم:"
-userLabel.TextColor3 = Color3.fromRGB(180, 200, 220)
-userLabel.TextSize = 14
-userLabel.Font = Enum.Font.GothamMedium
-userLabel.TextXAlignment = Enum.TextXAlignment.Left
-userLabel.Parent = page2
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 20)
+statusLabel.Position = UDim2.new(0, 10, 0, 6)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "🟢 STATUS: READY"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
+statusLabel.TextSize = 13
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = statusFrame
 
-local userBox = Instance.new("TextBox")
-userBox.Size = UDim2.new(0, 200, 0, 35)
-userBox.Position = UDim2.new(0, 130, 0, 2)
-userBox.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
-userBox.BackgroundTransparency = 0.2
-userBox.BorderSizePixel = 1
-userBox.BorderColor3 = Color3.fromRGB(0, 255, 200)
-userBox.Text = ""
-userBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-userBox.TextSize = 14
-userBox.Font = Enum.Font.SourceSansBold
-userBox.ClearTextOnFocus = false
-Instance.new("UICorner", userBox).CornerRadius = UDim.new(0, 8)
-userBox.Parent = page2
+local counterLabel = Instance.new("TextLabel")
+counterLabel.Size = UDim2.new(1, -20, 0, 20)
+counterLabel.Position = UDim2.new(0, 10, 0, 30)
+counterLabel.BackgroundTransparency = 1
+counterLabel.Text = "📊 SENT: 0"
+counterLabel.TextColor3 = CONFIG.SubText
+counterLabel.TextSize = 12
+counterLabel.Font = Enum.Font.Code
+counterLabel.TextXAlignment = Enum.TextXAlignment.Left
+counterLabel.Parent = statusFrame
 
-local userImage = Instance.new("ImageLabel")
-userImage.Size = UDim2.new(0, 80, 0, 80)
-userImage.Position = UDim2.new(0, 340, 0, 2)
-userImage.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-userImage.BackgroundTransparency = 0.2
-userImage.BorderSizePixel = 2
-userImage.BorderColor3 = Color3.fromRGB(0, 255, 200)
-userImage.Image = ""
-userImage.ImageTransparency = 0
-Instance.new("UICorner", userImage).CornerRadius = UDim.new(0, 40)
-userImage.Parent = page2
+local footer = Instance.new("TextLabel")
+footer.Size = UDim2.new(1, -30, 0, 18)
+footer.Position = UDim2.new(0, 15, 1, -25)
+footer.BackgroundTransparency = 1
+footer.Text = "2U ADMIN PLUS • HD SPAMMER"
+footer.TextColor3 = CONFIG.SubText
+footer.TextSize = 11
+footer.Font = Enum.Font.Gotham
+footer.TextXAlignment = Enum.TextXAlignment.Left
+footer.Parent = main
 
-local function updateUserImage()
-    local name = userBox.Text
-    for _, p in ipairs(players:GetPlayers()) do
-        if p.Name:lower():sub(1, #name) == name:lower() or p.DisplayName:lower():sub(1, #name) == name:lower() then
-            local userId = p.UserId
-            userImage.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=200&height=200&format=png"
-            return
-        end
-    end
-    userImage.Image = ""
-end
+-- ====================================================
+-- وظائف الواجهة
+-- ====================================================
+local running = false
+local stopSpam = false
+local totalSent = 0
 
-userBox:GetPropertyChangedSignal("Text"):Connect(updateUserImage)
-
-local function createActionBtn(text, color, y, x)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 160, 0, 40)
-    btn.Position = UDim2.new(x or 0, 0, y or 0, 0)
-    btn.BackgroundColor3 = color or Color3.fromRGB(150, 50, 200)
-    btn.BackgroundTransparency = 0.15
-    btn.BorderSizePixel = 2
-    btn.BorderColor3 = Color3.fromRGB(200, 100, 255)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 14
-    btn.Font = Enum.Font.GothamBold
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-    btn.Parent = page2
-    
-    btn.MouseButton1Click:Connect(function()
-        local name = userBox.Text
-        local target
-        for _, p in ipairs(players:GetPlayers()) do
-            if p.Name:lower():sub(1, #name) == name:lower() or p.DisplayName:lower():sub(1, #name) == name:lower() then
-                target = p
-                break
-            end
-        end
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = target.Character.HumanoidRootPart
-            local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if not myHrp then return end
-            
-            if text:find("الاغتصاب") then
-                for i = 1, 10 do
-                    myHrp.CFrame = hrp.CFrame * CFrame.new(0, 0, -i * 0.5)
-                    wait(0.05)
-                end
-                for i = 10, 1, -1 do
-                    myHrp.CFrame = hrp.CFrame * CFrame.new(0, 0, -i * 0.5)
-                    wait(0.05)
-                end
-            elseif text:find("مص") then
-                local head = target.Character:FindFirstChild("Head")
-                if head then
-                    for i = 1, 8 do
-                        myHrp.CFrame = head.CFrame * CFrame.new(0, -1.5, -i * 0.3)
-                        wait(0.05)
-                    end
-                    for i = 8, 1, -1 do
-                        myHrp.CFrame = head.CFrame * CFrame.new(0, -1.5, -i * 0.3)
-                        wait(0.05)
-                    end
-                end
-            elseif text:find("صعود") then
-                local head = target.Character:FindFirstChild("Head")
-                if head then
-                    myHrp.CFrame = head.CFrame * CFrame.new(0, 3, 0)
-                end
-            end
-        else
-            addLogMsg("❌ اللاعب غير موجود")
-        end
+local function sendCommand(cmd)
+    pcall(function()
+        local args = { [1] = cmd }
+        replicated.HDAdminHDClient.Signals.RequestCommandModification:InvokeServer(unpack(args))
     end)
-    return btn
 end
 
-createActionBtn("🔞 الاغتصاب", Color3.fromRGB(200, 50, 100), 0.25, 0)
-createActionBtn("💋 مص", Color3.fromRGB(200, 100, 50), 0.25, 0.35)
-createActionBtn("⬆️ صعود", Color3.fromRGB(50, 100, 200), 0.25, 0.7)
-
--- ====================================================
--- صفحة الحماية
--- ====================================================
-local page3 = Instance.new("Frame")
-page3.Size = UDim2.new(1, 0, 1, 0)
-page3.BackgroundTransparency = 1
-page3.Visible = false
-page3.Parent = pageContainer
-
-local protectBtn2 = Instance.new("TextButton")
-protectBtn2.Size = UDim2.new(0, 200, 0, 50)
-protectBtn2.Position = UDim2.new(0.5, -100, 0, 20)
-protectBtn2.BackgroundColor3 = Color3.fromRGB(150, 50, 200)
-protectBtn2.BackgroundTransparency = 0.15
-protectBtn2.BorderSizePixel = 2
-protectBtn2.BorderColor3 = Color3.fromRGB(200, 100, 255)
-protectBtn2.Text = "🛡️ حماية شاملة"
-protectBtn2.TextColor3 = Color3.fromRGB(255, 255, 255)
-protectBtn2.TextSize = 16
-protectBtn2.Font = Enum.Font.GothamBold
-Instance.new("UICorner", protectBtn2).CornerRadius = UDim.new(0, 10)
-protectBtn2.Parent = page3
-
-local lagBtn = Instance.new("TextButton")
-lagBtn.Size = UDim2.new(0, 200, 0, 50)
-lagBtn.Position = UDim2.new(0.5, -100, 0, 80)
-lagBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 50)
-lagBtn.BackgroundTransparency = 0.15
-lagBtn.BorderSizePixel = 2
-lagBtn.BorderColor3 = Color3.fromRGB(255, 200, 80)
-lagBtn.Text = "🐢 تباطؤ (حذف بكسلات)"
-lagBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-lagBtn.TextSize = 16
-lagBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", lagBtn).CornerRadius = UDim.new(0, 10)
-lagBtn.Parent = page3
-
-local rejoinBtn = Instance.new("TextButton")
-rejoinBtn.Size = UDim2.new(0, 200, 0, 50)
-rejoinBtn.Position = UDim2.new(0.5, -100, 0, 140)
-rejoinBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 200)
-rejoinBtn.BackgroundTransparency = 0.15
-rejoinBtn.BorderSizePixel = 2
-rejoinBtn.BorderColor3 = Color3.fromRGB(80, 200, 255)
-rejoinBtn.Text = "🔄 إعادة الدخول (Rejoin)"
-rejoinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-rejoinBtn.TextSize = 16
-rejoinBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0, 10)
-rejoinBtn.Parent = page3
-
--- ====================================================
--- صفحة الإضافات
--- ====================================================
-local page4 = Instance.new("Frame")
-page4.Size = UDim2.new(1, 0, 1, 0)
-page4.BackgroundTransparency = 1
-page4.Visible = false
-page4.Parent = pageContainer
-
-local extraLabel = Instance.new("TextLabel")
-extraLabel.Size = UDim2.new(1, 0, 0, 30)
-extraLabel.Position = UDim2.new(0, 0, 0, 20)
-extraLabel.BackgroundTransparency = 1
-extraLabel.Text = "⚡ إضافات قوية"
-extraLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
-extraLabel.TextSize = 20
-extraLabel.Font = Enum.Font.GothamBold
-extraLabel.Parent = page4
-
--- ====================================================
--- وظائف الأزرار
--- ====================================================
-local function protectPlayer()
-    local plr = game.Players.LocalPlayer
-    if not plr then return end
-    
-    addLogMsg("🛡️ جاري التنظيف الشامل...")
-    
-    if plr.PlayerGui then
-        for _, gui in ipairs(plr.PlayerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name == "HDAdminInterface" then
-                gui:Destroy()
-                addLogMsg("🧹 تم حذف HDAdminInterface")
-            end
-        end
-    end
-    
-    for _, child in ipairs(replicated:GetChildren()) do
-        if child.Name == "NightVision" then
-            child:Destroy()
-            addLogMsg("🧹 تم حذف NightVision من ReplicatedStorage")
-        end
-    end
-    
-    for _, child in ipairs(lighting:GetChildren()) do
-        if child.Name:lower():find("nightvision") or child.Name:lower():find("nv") then
-            child:Destroy()
-            addLogMsg("🧹 تم حذف NightVision من Lighting")
-        end
-    end
-    
-    lighting.Brightness = 1
-    lighting.Ambient = Color3.fromRGB(128, 128, 128)
-    lighting.ColorShift_Top = Color3.fromRGB(0, 0, 0)
-    lighting.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
-    
-    for _, child in ipairs(coreGui:GetChildren()) do
-        if child:IsA("ScreenGui") and child.Name:lower():find("hdadmin") then
-            child:Destroy()
-            addLogMsg("🧹 تم حذف من CoreGui")
-        end
-    end
-    
-    addLogMsg("✅ تم تنظيف جميع التأثيرات نهائياً")
+local function updateStatus(text, color)
+    statusLabel.Text = text
+    statusLabel.TextColor3 = color
 end
 
-local function createLag()
-    addLogMsg("🐢 جاري التباطؤ...")
-    for i = 1, 50 do
-        for _, p in ipairs(players:GetPlayers()) do
-            if p.Character then
-                for _, part in ipairs(p.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.Material = Enum.Material.Neon
-                        part.Transparency = 0.5
-                    end
-                end
-            end
-        end
-        wait(0.05)
-    end
-    addLogMsg("✅ تم التباطؤ")
+local function updateCounter()
+    counterLabel.Text = "📊 SENT: " .. totalSent
 end
 
-local function rejoin()
-    addLogMsg("🔄 جاري إعادة الدخول...")
-    local ts = game:GetService("TeleportService")
-    local placeId = game.PlaceId
-    local jobId = game.JobId
-    ts:TeleportToPlaceInstance(placeId, jobId, player)
-end
-
-protectBtn2.MouseButton1Click:Connect(protectPlayer)
-lagBtn.MouseButton1Click:Connect(createLag)
-rejoinBtn.MouseButton1Click:Connect(rejoin)
-
 -- ====================================================
--- وظيفة السبام (مكمل)
+-- زر السبام
 -- ====================================================
-startBtn.MouseButton1Click:Connect(function()
+spamBtn.MouseButton1Click:Connect(function()
     if running then
-        addLogMsg("⚠️ السبام يعمل بالفعل")
+        stopSpam = true
+        running = false
+        spamBtn.Text = "▶  START SPAM"
+        spamBtn.BackgroundColor3 = CONFIG.PrimaryRed
+        updateStatus("⏹ STATUS: STOPPED", Color3.fromRGB(255, 200, 0))
         return
     end
-    local fullCmd = cmdBox.Text
-    if fullCmd == "" then fullCmd = "/re me" end
-    local speed = tonumber(speedBox.Text) or 0.1
-    if speed < 0.01 then speed = 0.01 end
+    
+    local cmd = cmdBox.Text
+    if cmd == "" then cmd = "/re" end
+    
+    local speedInput = tonumber(speedBox.Text) or 0
+    if speedInput < 0 then speedInput = 0 end
+    
+    local delay
+    if speedInput == 0 then
+        delay = 0 -- أقصى سرعة (بدون تأخير)
+    else
+        delay = 1 / speedInput
+    end
     
     running = true
     stopSpam = false
-    status.Text = "🟡 جاري السبام..."
-    status.TextColor3 = Color3.fromRGB(255, 200, 0)
-    addLogMsg("🚀 بدء: " .. fullCmd .. " | سرعة: " .. speed .. "ث")
+    totalSent = 0
+    updateCounter()
+    updateStatus("🟡 STATUS: SPAMMING...", Color3.fromRGB(255, 200, 0))
+    spamBtn.Text = "⏹  STOP SPAM"
+    spamBtn.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
     
     spawn(function()
-        local count = 0
         while not stopSpam do
-            count = count + 1
-            pcall(function()
-                replicated.HDAdminHDClient.Signals.CreateLog:FireServer(fullCmd)
-                replicated.RemoteEvents.DataService:FireServer(fullCmd)
-                replicated.HDAdminHDClient.Signals.RequestCommandModification:InvokeServer(fullCmd)
-            end)
-            if count % 10 == 0 then
-                addLogMsg("📌 أرسل " .. count .. " أمر")
+            sendCommand(cmd)
+            totalSent = totalSent + 1
+            
+            if totalSent % 10 == 0 then
+                updateCounter()
             end
-            wait(speed)
+            
+            if delay > 0 then
+                wait(delay)
+            else
+                -- أقصى سرعة - لا تأخير
+            end
         end
+        
         running = false
-        status.Text = "🟢 متوقف"
-        status.TextColor3 = Color3.fromRGB(0, 255, 100)
-        addLogMsg("⏹ توقف بعد " .. count .. " أمر")
+        updateCounter()
     end)
 end)
 
-stopBtn.MouseButton1Click:Connect(function()
-    if running then
-        stopSpam = true
-        addLogMsg("⏳ جاري الإيقاف...")
-    else
-        addLogMsg("⚠️ لا يوجد سبام نشط")
+-- ====================================================
+-- تأثيرات Hover
+-- ====================================================
+spamBtn.MouseEnter:Connect(function()
+    if not running then
+        tweenService:Create(spamBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+        }):Play()
+    end
+end)
+
+spamBtn.MouseLeave:Connect(function()
+    if not running then
+        tweenService:Create(spamBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = CONFIG.PrimaryRed
+        }):Play()
     end
 end)
 
 -- ====================================================
--- تبديل الصفحات
+-- زر الإغلاق و التصغير
 -- ====================================================
-local function setPage(page)
-    page1.Visible = page == 1
-    page2.Visible = page == 2
-    page3.Visible = page == 3
-    page4.Visible = page == 4
-end
+closeBtn.MouseButton1Click:Connect(function()
+    stopSpam = true
+    running = false
+    gui:Destroy()
+end)
 
-tab1.MouseButton1Click:Connect(function() setPage(1) end)
-tab2.MouseButton1Click:Connect(function() setPage(2) end)
-tab3.MouseButton1Click:Connect(function() setPage(3) end)
-tab4.MouseButton1Click:Connect(function() setPage(4) end)
+local minimized = false
+local originalSize = main.Size
 
-addLogMsg("💡 S7 ULTRA SPAM ENGINE V11")
-addLogMsg("🛡️ اضغط على حماية لتنظيف NightVision")
-print("✅ S7 ULTRA SPAM ENGINE V11 جاهز!")
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        tweenService:Create(main, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 480, 0, 50)
+        }):Play()
+        label1.Visible = false
+        cmdBox.Visible = false
+        spamBtn.Visible = false
+        label2.Visible = false
+        speedBox.Visible = false
+        statusFrame.Visible = false
+        footer.Visible = false
+    else
+        tweenService:Create(main, TweenInfo.new(0.3), {
+            Size = originalSize
+        }):Play()
+        task.wait(0.3)
+        label1.Visible = true
+        cmdBox.Visible = true
+        spamBtn.Visible = true
+        label2.Visible = true
+        speedBox.Visible = true
+        statusFrame.Visible = true
+        footer.Visible = true
+    end
+end)
+
+-- ====================================================
+-- نبض الشعار
+-- ====================================================
+local pulse = 0
+runService.RenderStepped:Connect(function(dt)
+    pulse = pulse + dt * 3
+    local scale = 1 + math.sin(pulse) * 0.05
+    logoText.TextSize = 14 * scale
+end)
+
+print("✅ 2U ADMIN PLUS V3 - ULTRA FAST + PERSISTENT SPAMMER LOADED!")
