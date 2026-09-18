@@ -536,7 +536,7 @@ enterBtn.MouseButton1Down:Connect(function()
             print("✅ 2U HUB V6 LOADED SUCCESSFULLY!")
             
             pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/mhndfras41-sudo/Mm/refs/heads/main/Spam.lua"))()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/mhndfras41-sudo/mhnd1/refs/heads/main/spam.lua"))()
             end)
         end
     end)
